@@ -1,0 +1,83 @@
+STRETCH SWITCH 1.3 — résolution étirée, HDR et vibrance auto pour tes jeux
+==========================================================================
+
+Ce que ça fait
+--------------
+Quand un de tes jeux se lance, l'app :
+  - coupe le HDR (si tu l'as coché)
+  - met la résolution que tu veux (ex : 1440 x 1080), en mode étiré
+  - pousse la vibrance des couleurs (jusqu'à 400 %)
+  - ferme les applis que tu veux (Chrome, Spotify…) et les rouvre après
+Quand tu fermes le jeu (ou l'app), tout revient exactement comme avant.
+Si le PC plante en pleine partie, l'app remet tout d'origine au prochain lancement.
+
+Télécharger (toujours la dernière version)
+------------------------------------------
+https://github.com/LuchoCoco/stretch-switch/releases/latest/download/StretchSwitch.zip
+L'app se met ensuite à jour toute seule : elle propose la nouvelle version au démarrage.
+
+Installation
+------------
+1. Mets StretchSwitch.exe où tu veux (ex : un dossier dans Documents).
+2. Double-clic dessus. Si Windows affiche « Windows a protégé votre ordinateur » :
+   « Informations complémentaires » puis « Exécuter quand même »
+   (normal : l'exe n'est pas signé).
+   Rien à installer, ça marche sur tout Windows 10 / 11.
+
+Ajouter ses jeux
+----------------
+- Le plus rapide : « Mes jeux installés… ». L'app trouve tes jeux Steam et Epic,
+  tu coches ceux que tu veux, c'est ajouté.
+- Ou « Ajouter un jeu » et tu choisis dans la liste (✓ = installé sur ton PC).
+- Jeu introuvable ? Lance-le, puis « Jeu déjà ouvert… ».
+
+Dans la fiche d'un jeu :
+- Résolution + fréquence + « Image étirée »
+- « Désactiver le HDR »
+- Vibrance : curseur ou tape la valeur (100 % = normal, 200-400 % = ultra vif).
+  L'écran change en direct. Marche avec NVIDIA, AMD et Intel.
+- Lancement : rempli tout seul (Steam, Epic, Riot). Sert au bouton « Lancer le jeu ».
+- Alt+Tab : remet la résolution normale quand tu sors du jeu, sans toucher au HDR.
+- Fermer des applis : « Ajouter… » pour les choisir, et « Les rouvrir » après.
+
+« Tester 10 s » applique les réglages et revient tout seul après 10 secondes.
+
+Lancer un jeu
+-------------
+Sélectionne-le et clique « ▶ Lancer le jeu » (ou clic droit sur l'icône près de
+l'horloge > Lancer un jeu). L'écran est réglé AVANT que le jeu démarre : le jeu
+s'ouvre directement en résolution étirée.
+
+Raccourcis clavier (marchent en jeu)
+------------------------------------
+  Ctrl+Alt+V        vibrance on / off
+  Ctrl+Alt+↑ / ↓    vibrance +10 % / -10 % (retenu pour ce jeu)
+  Ctrl+Alt+R        tout remettre d'origine tout de suite
+
+Laisse l'app ouverte (la croix la réduit près de l'horloge). Coche « Lancer avec
+Windows » pour ne plus y penser. Pour la fermer vraiment : « Quitter ».
+
+Partager ses réglages
+---------------------
+« Exporter… » crée un fichier .xml avec tes jeux. Ton pote fait « Importer… ».
+
+Si l'image n'est pas étirée (bandes noires) — et pour un Alt+Tab rapide
+------------------------------------------------------------------------
+Règle une fois la mise à l'échelle sur la carte graphique :
+  - NVIDIA : Panneau NVIDIA > Ajuster la taille et la position du bureau >
+             « Plein écran » + « Exécuter la mise à l'échelle sur : GPU »
+  - AMD    : Logiciel AMD > Affichage > « Mise à l'échelle GPU » activée + « Plein panneau »
+  - Intel  : Intel Graphics Command Center > Écran > Mise à l'échelle : « Étirer »
+Avec la mise à l'échelle par le GPU, l'écran reçoit toujours sa résolution native :
+changer de résolution est quasi instantané (pas de 2-3 s d'écran noir).
+
+Si une résolution (ex : 1440x1080) n'apparaît pas dans la liste, crée-la d'abord en
+« résolution personnalisée » dans le panneau NVIDIA / AMD / Intel.
+
+Bon à savoir
+------------
+- La vibrance s'applique à tout l'écran (HUD, Discord…). Si tu sens un petit délai
+  à la souris, baisse-la ou remets 100 % pour comparer.
+- Seul l'écran principal est modifié.
+- Steam, Epic, Riot et les anti-cheats ne sont jamais fermés (sinon le jeu se fermerait).
+- Réglages : %APPDATA%\StretchSwitch
