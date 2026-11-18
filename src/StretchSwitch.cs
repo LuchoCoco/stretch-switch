@@ -472,6 +472,12 @@ namespace StretchSwitch
 
         public static Icon MakeIcon()
         {
+            try
+            {
+                var exe = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (exe != null) return exe;
+            }
+            catch { }
             using (var bmp = new Bitmap(32, 32))
             {
                 using (var g = Graphics.FromImage(bmp))
