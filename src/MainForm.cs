@@ -1,4 +1,4 @@
-// Fenêtre principale + surveillance des jeux + raccourcis clavier.
+﻿// Fenêtre principale + surveillance des jeux + raccourcis clavier.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -289,36 +289,47 @@ namespace StretchSwitch
             base.WndProc(ref m);
         }
 
+        // mode de vibrance de la session : écran du jeu seulement (NVIDIA) ou tous les écrans
+        bool VibAll { get { return active != null ? active.VibranceAllScreens : !Vibrance.PerScreen; } }
+
+        void SetSessionVib(int v)
+        {
+            sessionVib = v; Vibrance.Base = v; Vibrance.BaseAll = VibAll;
+            Vibrance.Set(v, VibAll);
+        }
+
         void ToggleVibrance()
         {
             if (Vibrance.Current != 100)
             {
                 lastVibOn = Vibrance.Current;
-                sessionVib = 100; Vibrance.Base = 100; Vibrance.Set(100);
+                SetSessionVib(100);
                 osd.ShowText("Vibrance : normale");
             }
             else
             {
                 int v = active != null && active.Vibrance != 100 ? active.Vibrance : lastVibOn;
                 if (v == 100) v = 200;
-                sessionVib = v; Vibrance.Base = v; Vibrance.Set(v);
+                v = Math.Min(v, Vibrance.MaxFor(VibAll));
+                SetSessionVib(v);
                 osd.ShowText("Vibrance : " + v + " %");
             }
         }
 
         void StepVibrance(int delta)
         {
-            int v = Math.Max(0, Math.Min(400, Vibrance.Current + delta));
-            sessionVib = v; Vibrance.Base = v; Vibrance.Set(v);
+            int max = Vibrance.MaxFor(VibAll);
+            int v = Math.Max(0, Math.Min(max, Vibrance.Current + delta));
+            SetSessionVib(v);
             if (v != 100) lastVibOn = v;
+            string tail = v == max ? " (max)" : "";
             if (active != null)
             {
                 active.Vibrance = v; Store.SaveConfig(cfg); PopulateList();
-                osd.ShowText("Vibrance : " + v + " %  (" + active.Name + ")");
+                osd.ShowText("Vibrance : " + v + " %" + tail + "  —  " + active.Name);
             }
-            else osd.ShowText("Vibrance : " + v + " %");
+            else osd.ShowText("Vibrance : " + v + " %" + tail);
         }
-
         void EmergencyReset()
         {
             StopTest();
@@ -330,7 +341,7 @@ namespace StretchSwitch
                 SetIdleStatus();
                 lblStatus.Text = "Écran remis d'origine. Réactivé au prochain lancement du jeu.";
             }
-            else { sessionVib = 100; Vibrance.Base = 100; Vibrance.Set(100); Restore(); }
+            else { sessionVib = 100; Vibrance.ResetAll(); Restore(); }
             osd.ShowText("Écran remis d'origine");
         }
 
@@ -459,7 +470,14 @@ namespace StretchSwitch
             {
                 string dev = Display.PrimaryDevice();
                 var dm = Display.Current(dev);
-                lblScreen.Text = "Écran principal : " + dm.dmPelsWidth + " x " + dm.dmPelsHeight + " @ " + dm.dmDisplayFrequency + " Hz   •   HDR : " + Hdr.Describe(dev);
+                string scale = "";
+                int sw, sh, gw, gh;
+                if (Hdr.SignalInfo(dev, out sw, out sh, out gw, out gh))
+                {
+                    if (sw != gw || sh != gh) scale = "   •   étiré par la carte graphique ✓ (Alt+Tab rapide)";
+                    else if (saved != null && saved.ResolutionChanged) scale = "   •   ⚠ étiré par l'écran (lent)";
+                }
+                lblScreen.Text = "Écran principal : " + dm.dmPelsWidth + " x " + dm.dmPelsHeight + " @ " + dm.dmDisplayFrequency + " Hz   •   HDR : " + Hdr.Describe(dev) + scale;
             }
             catch { lblScreen.Text = ""; }
         }
@@ -598,8 +616,8 @@ namespace StretchSwitch
             if (p.Vibrance != 100)
             {
                 lastVibOn = p.Vibrance;
-                Vibrance.Base = p.Vibrance;
-                if (!Vibrance.Set(p.Vibrance)) error = (error == null ? "" : error + " ") + "Impossible d'appliquer la vibrance.";
+                Vibrance.Base = p.Vibrance; Vibrance.BaseAll = p.VibranceAllScreens;
+                if (!Vibrance.Set(p.Vibrance, p.VibranceAllScreens)) error = (error == null ? "" : error + " ") + "Impossible d'appliquer la vibrance.";
             }
             if (st.HdrChanged || st.ResolutionChanged) Store.SaveState(st); else Store.DeleteState();
 
@@ -619,8 +637,7 @@ namespace StretchSwitch
 
         void Restore()
         {
-            Vibrance.Base = 100;
-            if (Vibrance.Current != 100) Vibrance.Set(100);
+            Vibrance.ResetAll();
             sessionVib = 100;
             var st = saved;
             if (st != null)
@@ -650,6 +667,7 @@ namespace StretchSwitch
 
         void RecoverAfterCrash()
         {
+            Vibrance.RecoverDriver();
             var st = Store.LoadState();
             if (st == null) return;
             saved = st;
@@ -694,7 +712,7 @@ namespace StretchSwitch
                 {
                     onDesktop = false;
                     if (saved.ResolutionChanged) Display.SetMode(saved.Device, active.Width, active.Height, active.RefreshRate, active.Stretch);
-                    if (sessionVib != 100) Vibrance.Set(sessionVib);
+                    if (sessionVib != 100) Vibrance.Set(sessionVib, active.VibranceAllScreens);
                     SetGameStatus(active, null);
                     RefreshScreenInfo();
                 }
@@ -704,7 +722,7 @@ namespace StretchSwitch
                 if (++awayTicks < 2) return; // petite marge pour éviter les allers-retours
                 onDesktop = true;
                 if (saved.ResolutionChanged) Display.Restore(saved);
-                if (Vibrance.Current != 100) Vibrance.Set(100);
+                if (Vibrance.Current != 100) Vibrance.Set(100, active.VibranceAllScreens);
                 SetGameStatus(active, "en arrière-plan (bureau en résolution normale)");
                 RefreshScreenInfo();
             }
@@ -720,10 +738,22 @@ namespace StretchSwitch
             testing = true;
             string err = Apply(p);
             if (err != null) MessageBox.Show(this, err, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else if (saved != null && saved.ResolutionChanged && !GpuScaling())
+                tray.ShowBalloonTip(8000, "Changements de résolution lents",
+                    "C'est ton écran qui étire l'image (2-3 s de noir à chaque changement). Panneau NVIDIA > Ajuster la taille et la position du bureau > Plein écran + mise à l'échelle sur : GPU.",
+                    ToolTipIcon.Warning);
             testLeft = 10;
             lblStatus.ForeColor = Ui.Accent;
             lblStatus.Text = "Test en cours… retour à la normale dans " + testLeft + " s";
             testTimer.Start();
+        }
+
+        // true si la carte graphique envoie toujours la résolution native à l'écran
+        static bool GpuScaling()
+        {
+            int sw, sh, gw, gh;
+            if (!Hdr.SignalInfo(Display.PrimaryDevice(), out sw, out sh, out gw, out gh)) return true;
+            return sw != gw || sh != gh;
         }
 
         void StopTest()

@@ -1,4 +1,4 @@
-# Publie une nouvelle version de Stretch Switch sur GitHub.
+﻿# Publie une nouvelle version de Stretch Switch sur GitHub.
 # Usage :  .\publier.ps1 1.3.1 "Ce qui change dans cette version"
 # Les potes qui ont l'app reçoivent la mise à jour au prochain démarrage.
 param(
@@ -21,7 +21,7 @@ $code = [regex]::Replace($code, 'public const string GitHubRepo = "[^"]*";', "pu
 [IO.File]::WriteAllText((Resolve-Path $theme), $code, (New-Object Text.UTF8Encoding $true))
 
 # 2. compilation + zip
-& cmd /c build.bat
+& cmd /c "`"$PSScriptRoot\build.bat`""
 if ($LASTEXITCODE -ne 0) { throw "La compilation a échoué." }
 Compress-Archive -Force -Path StretchSwitch.exe, LISEZ-MOI.txt -DestinationPath StretchSwitch.zip
 

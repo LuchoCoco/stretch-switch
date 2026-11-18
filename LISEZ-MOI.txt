@@ -1,4 +1,4 @@
-STRETCH SWITCH 1.3 — résolution étirée, HDR et vibrance auto pour tes jeux
+﻿STRETCH SWITCH 1.4 — résolution étirée, HDR et vibrance auto pour tes jeux
 ==========================================================================
 
 Ce que ça fait
@@ -34,8 +34,11 @@ Ajouter ses jeux
 Dans la fiche d'un jeu :
 - Résolution + fréquence + « Image étirée »
 - « Désactiver le HDR »
-- Vibrance : curseur ou tape la valeur (100 % = normal, 200-400 % = ultra vif).
-  L'écran change en direct. Marche avec NVIDIA, AMD et Intel.
+- Vibrance : curseur ou tape la valeur (100 % = normal). L'écran change en direct.
+    * Carte NVIDIA : seulement l'écran du jeu, via la vibrance du pilote
+      (200 % = vibrance NVIDIA à fond). Aucun impact sur les performances.
+    * Case « Sur tous les écrans » (ou carte AMD / Intel) : filtre Windows,
+      jusqu'à 400 % (ultra vif), mais sur tous les écrans.
 - Lancement : rempli tout seul (Steam, Epic, Riot). Sert au bouton « Lancer le jeu ».
 - Alt+Tab : remet la résolution normale quand tu sors du jeu, sans toucher au HDR.
 - Fermer des applis : « Ajouter… » pour les choisir, et « Les rouvrir » après.
@@ -76,8 +79,10 @@ Si une résolution (ex : 1440x1080) n'apparaît pas dans la liste, crée-la d'ab
 
 Bon à savoir
 ------------
-- La vibrance s'applique à tout l'écran (HUD, Discord…). Si tu sens un petit délai
-  à la souris, baisse-la ou remets 100 % pour comparer.
+- En mode « tous les écrans », si tu sens un petit délai à la souris, repasse en mode
+  écran du jeu (NVIDIA) ou remets 100 % pour comparer.
+- La ligne « Écran principal » de l'app indique « étiré par la carte graphique ✓ » quand
+  l'Alt+Tab sera rapide, ou « ⚠ étiré par l'écran (lent) » s'il faut régler le pilote.
 - Seul l'écran principal est modifié.
 - Steam, Epic, Riot et les anti-cheats ne sont jamais fermés (sinon le jeu se fermerait).
 - Réglages : %APPDATA%\StretchSwitch

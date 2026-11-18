@@ -31,6 +31,7 @@ namespace StretchSwitch
         public bool Stretch = true;
         public bool DisableHdr = true;
         public int Vibrance = 100; // saturation en % (100 = normal)
+        public bool VibranceAllScreens = false; // false = seulement l'écran du jeu (NVIDIA)
         public string LaunchCommand = "";   // steam://..., com.epicgames..., chemin .exe
         public string CloseApps = "";       // processus à fermer au lancement (séparés par ;)
         public bool RelaunchApps = true;    // les relancer quand le jeu se ferme
@@ -96,6 +97,27 @@ namespace StretchSwitch
         public static SavedState LoadState() { return Load<SavedState>(StatePath); }
         public static void SaveState(SavedState s) { try { Save(StatePath, s); } catch { } }
         public static void DeleteState() { try { if (File.Exists(StatePath)) File.Delete(StatePath); } catch { } }
+
+        // niveau de vibrance NVIDIA d'origine (pour le remettre même après un plantage)
+        static string DvcPath { get { return Path.Combine(Dir, "vibrance-a-restaurer.txt"); } }
+        public static void SaveDvc(string dev, int level)
+        {
+            try { Directory.CreateDirectory(Dir); File.WriteAllText(DvcPath, dev + "|" + level); } catch { }
+        }
+        public static bool LoadDvc(out string dev, out int level)
+        {
+            dev = null; level = 0;
+            try
+            {
+                if (!File.Exists(DvcPath)) return false;
+                var parts = File.ReadAllText(DvcPath).Trim().Split('|');
+                if (parts.Length != 2 || !int.TryParse(parts[1], out level)) return false;
+                dev = parts[0];
+                return true;
+            }
+            catch { return false; }
+        }
+        public static void DeleteDvc() { try { if (File.Exists(DvcPath)) File.Delete(DvcPath); } catch { } }
 
         public static AppConfig Import(string path) { return Load<AppConfig>(path); }
         public static void Export(string path, AppConfig c) { Save(path, c); }
@@ -255,6 +277,34 @@ namespace StretchSwitch
             return false;
         }
 
+        // Taille du bureau (source) et taille réellement envoyée à l'écran (signal).
+        // Si elles diffèrent, c'est la carte graphique qui étire l'image => changements de résolution rapides.
+        public static bool SignalInfo(string gdiName, out int srcW, out int srcH, out int sigW, out int sigH)
+        {
+            srcW = srcH = sigW = sigH = 0;
+            uint np, nm;
+            if (Native.GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out np, out nm) != 0) return false;
+            var paths = new PATH_INFO[np];
+            var modes = new MODE_INFO[nm];
+            if (Native.QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref np, paths, ref nm, modes, IntPtr.Zero) != 0) return false;
+            for (int i = 0; i < np; i++)
+            {
+                var sn = new SOURCE_NAME();
+                sn.header.type = GET_SOURCE_NAME;
+                sn.header.size = (uint)Marshal.SizeOf(typeof(SOURCE_NAME));
+                sn.header.adapterId = paths[i].source.adapterId;
+                sn.header.id = paths[i].source.id;
+                if (Native.DisplayConfigGetDeviceInfo(ref sn) != 0 || !string.Equals(sn.gdiName, gdiName, StringComparison.OrdinalIgnoreCase)) continue;
+                uint si = paths[i].source.modeInfoIdx, ti = paths[i].target.modeInfoIdx;
+                if (si >= nm || ti >= nm) return false;
+                // mode source : width, height (u0) ; mode cible : activeSize (u3)
+                srcW = (int)(modes[si].u0 & 0xFFFFFFFF); srcH = (int)(modes[si].u0 >> 32);
+                sigW = (int)(modes[ti].u3 & 0xFFFFFFFF); sigH = (int)(modes[ti].u3 >> 32);
+                return srcW > 0 && sigW > 0;
+            }
+            return false;
+        }
+
         public static bool GetState(LUID a, uint id, out bool supported, out bool enabled)
         {
             supported = false; enabled = false;
@@ -300,9 +350,10 @@ namespace StretchSwitch
     }
 
     // ------------------------------------------------------------------ Vibrance (saturation)
-    // Filtre de couleur plein écran de Windows (même mécanisme que les « filtres de couleur »
-    // d'accessibilité) : marche avec NVIDIA, AMD et Intel, sans limite de 100 %.
-    // Le filtre disparaît tout seul si l'app se ferme ou plante.
+    // Deux façons :
+    //  - pilote NVIDIA (vibrance numérique) : seulement l'écran du jeu, aucun coût, max = 100 % du panneau NVIDIA
+    //  - filtre de couleur Windows : tous les écrans, sans limite, marche avec AMD / Intel
+    //    (disparaît tout seul si l'app se ferme ou plante)
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MAGCOLOREFFECT { [MarshalAs(UnmanagedType.ByValArray, SizeConst = 25)] public float[] transform; }
@@ -312,16 +363,27 @@ namespace StretchSwitch
         [DllImport("Magnification.dll")] static extern bool MagInitialize();
         [DllImport("Magnification.dll")] static extern bool MagSetFullscreenColorEffect(ref MAGCOLOREFFECT effect);
 
-        static bool initialized;
-        public static int Current = 100;   // valeur affichée en ce moment
-        public static int Base = 100;      // valeur à remettre après un aperçu
+        static bool magReady;
+        static int filterLevel = 100;
+        static int? driverOriginal;   // niveau NVIDIA d'origine, à remettre
+        static string driverDevice;
+
+        public static int Current = 100;      // valeur affichée en ce moment
+        public static bool AllScreens;        // mode utilisé en ce moment
+        public static int Base = 100;         // valeur à remettre après un aperçu
+        public static bool BaseAll;
+
+        // Vibrance sur l'écran du jeu seulement possible ?
+        public static bool PerScreen { get { return NvVibrance.Available; } }
+
+        // Valeur max utile : au-delà de 200 % le pilote NVIDIA est déjà à fond
+        public static int MaxFor(bool allScreens) { return !allScreens && PerScreen ? 200 : 400; }
 
         static float[] Matrix(int percent)
         {
             float s = percent / 100f;
             float[] lum = { 0.2126f, 0.7152f, 0.0722f };
             var m = new float[25];
-            // vecteur ligne [r g b a 1] x M : sortie_j = s*entrée_j + (1-s)*luminance
             for (int i = 0; i < 3; i++)
                 for (int j = 0; j < 3; j++)
                     m[i * 5 + j] = (1 - s) * lum[i] + (i == j ? s : 0);
@@ -329,24 +391,76 @@ namespace StretchSwitch
             return m;
         }
 
-        public static bool Set(int percent)
+        static bool SetFilter(int percent)
         {
-            if (percent == Current && initialized) return true;
+            if (percent == filterLevel) return true;
             try
             {
-                if (!initialized) initialized = MagInitialize();
-                if (!initialized) return false;
+                if (!magReady) magReady = MagInitialize();
+                if (!magReady) return false;
                 var e = new MAGCOLOREFFECT { transform = Matrix(percent) };
-                bool ok = MagSetFullscreenColorEffect(ref e);
-                if (ok) Current = percent;
-                return ok;
+                if (!MagSetFullscreenColorEffect(ref e)) return false;
+                filterLevel = percent;
+                return true;
             }
             catch { return false; }
         }
 
-        public static void BackToBase() { Set(Base); }
-    }
+        static bool SetDriver(int percent)
+        {
+            if (percent == 100)
+            {
+                if (driverOriginal == null) return true;
+                if (!NvVibrance.Set(driverDevice, driverOriginal.Value)) return false;
+                driverOriginal = null; driverDevice = null;
+                Store.DeleteDvc();
+                return true;
+            }
+            string dev = driverDevice ?? Display.PrimaryDevice();
+            int cur, min, max;
+            if (!NvVibrance.Get(dev, out cur, out min, out max)) return false;
+            if (driverOriginal == null)
+            {
+                driverOriginal = cur; driverDevice = dev;
+                Store.SaveDvc(dev, cur);
+            }
+            int orig = driverOriginal.Value;
+            int level = percent >= 100
+                ? orig + (int)Math.Round((max - orig) * Math.Min(percent - 100, 100) / 100.0)
+                : orig - (int)Math.Round((orig - min) * (100 - percent) / 100.0);
+            return NvVibrance.Set(dev, Math.Max(min, Math.Min(max, level)));
+        }
 
+        public static bool Set(int percent) { return Set(percent, AllScreens); }
+
+        public static bool Set(int percent, bool allScreens)
+        {
+            bool useDriver = !allScreens && PerScreen;
+            bool ok;
+            if (useDriver) { SetFilter(100); ok = SetDriver(percent); }
+            else { SetDriver(100); ok = SetFilter(percent); }
+            if (ok) { Current = percent; AllScreens = allScreens; }
+            return ok;
+        }
+
+        // Tout remettre comme à l'origine (les deux méthodes)
+        public static void ResetAll()
+        {
+            SetFilter(100);
+            SetDriver(100);
+            Current = 100; Base = 100;
+        }
+
+        public static void BackToBase() { Set(Base, BaseAll); }
+
+        // Après un plantage : remettre le niveau NVIDIA d'origine
+        public static void RecoverDriver()
+        {
+            string dev; int level;
+            if (Store.LoadDvc(out dev, out level) && NvVibrance.Available) NvVibrance.Set(dev, level);
+            Store.DeleteDvc();
+        }
+    }
     // ------------------------------------------------------------------ UI helpers
 
     static class Ui

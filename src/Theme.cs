@@ -1,4 +1,4 @@
-// Thème clair / sombre, affichage à l'écran (OSD) et mise à jour automatique.
+﻿// Thème clair / sombre, affichage à l'écran (OSD) et mise à jour automatique.
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -202,7 +202,7 @@ namespace StretchSwitch
 
     public static class Updater
     {
-        public const string Version = "1.3.0";
+        public const string Version = "1.4.0";
 
         // Dépôt GitHub qui héberge les versions, ex : "pseudo/stretch-switch".
         // Vide = mises à jour désactivées.

@@ -137,7 +137,8 @@ namespace StretchSwitch
         TextBox txtName = new TextBox(), txtProc = new TextBox(), txtLaunch = new TextBox(), txtClose = new TextBox();
         string exePath = "";
         CheckBox chkRes = new CheckBox(), chkStretch = new CheckBox(), chkHdr = new CheckBox();
-        CheckBox chkAltTab = new CheckBox(), chkRelaunch = new CheckBox();
+        CheckBox chkAltTab = new CheckBox(), chkRelaunch = new CheckBox(), chkVibAll = new CheckBox();
+        Label lblVibHint;
         ComboBox cmbRes = new ComboBox(), cmbHz = new ComboBox(), cmbGame = new ComboBox();
         TrackBar trkVib = new TrackBar();
         Label lblVib = new Label();
@@ -185,7 +186,8 @@ namespace StretchSwitch
             numVib.SetBounds(412, y + 4, 64, 24); numVib.Minimum = 0; numVib.Maximum = 400; numVib.Increment = 5;
             numVib.Font = Ui.Bold; numVib.TextAlign = HorizontalAlignment.Right; Controls.Add(numVib);
             lblVib.SetBounds(480, y + 8, 24, 20); lblVib.Text = "%"; Controls.Add(lblVib); y += 40;
-            Controls.Add(UiX.Hint("100 % = normal · 200-400 % = couleurs ultra vives (aperçu en direct)", 14, y, 490));
+            lblVibHint = UiX.Hint("", 14, y, 490); Controls.Add(lblVibHint); y += 24;
+            chkVibAll.Text = "Sur tous les écrans (filtre Windows, jusqu'à 400 %)"; chkVibAll.SetBounds(14, y, 490, 24); Controls.Add(chkVibAll);
 
             // séparateur
             Controls.Add(new Label { BorderStyle = BorderStyle.Fixed3D, Left = 522, Top = 14, Width = 2, Height = 420 });
@@ -264,7 +266,11 @@ namespace StretchSwitch
                 int v;
                 if (int.TryParse(numVib.Text, out v) && v >= 0 && v <= 400 && v != trkVib.Value) numVib.Value = v;
             };
-            vibPreview.Tick += (s, e) => { vibPreview.Stop(); Vibrance.Set(trkVib.Value); };
+            vibPreview.Tick += (s, e) => { vibPreview.Stop(); Vibrance.Set(trkVib.Value, chkVibAll.Checked); };
+            chkVibAll.Checked = p.VibranceAllScreens || !Vibrance.PerScreen;
+            chkVibAll.Enabled = Vibrance.PerScreen;
+            UpdateVibMode();
+            chkVibAll.CheckedChanged += (s, e) => { UpdateVibMode(); vibPreview.Stop(); vibPreview.Start(); };
             FormClosed += (s, e) => { vibPreview.Stop(); Vibrance.BackToBase(); };
 
             chkRes.CheckedChanged += (s, e) => UpdateEnabled();
@@ -306,6 +312,21 @@ namespace StretchSwitch
         }
 
         void UpdateEnabled() { cmbRes.Enabled = cmbHz.Enabled = chkStretch.Enabled = chkRes.Checked; }
+
+        // Écran du jeu seulement (pilote NVIDIA, max 200 %) ou tous les écrans (filtre, max 400 %)
+        void UpdateVibMode()
+        {
+            int max = Vibrance.MaxFor(chkVibAll.Checked);
+            if (trkVib.Value > max) trkVib.Value = max;
+            trkVib.Maximum = max; numVib.Maximum = max;
+            trkVib.TickFrequency = max / 8;
+            if (!Vibrance.PerScreen)
+                lblVibHint.Text = "100 % = normal. Pas de carte NVIDIA : s'applique à tous les écrans.";
+            else if (chkVibAll.Checked)
+                lblVibHint.Text = "100 % = normal · jusqu'à 400 %, mais sur TOUS les écrans.";
+            else
+                lblVibHint.Text = "Écran du jeu seulement · 200 % = vibrance NVIDIA à fond.";
+        }
 
         bool ParseRes(out int w, out int h)
         {
@@ -370,7 +391,8 @@ namespace StretchSwitch
             Profile.RefreshRate = SelectedHz();
             Profile.Stretch = chkStretch.Checked;
             Profile.DisableHdr = chkHdr.Checked;
-            Profile.Vibrance = vib;
+            Profile.Vibrance = Math.Min(vib, Vibrance.MaxFor(chkVibAll.Checked));
+            Profile.VibranceAllScreens = chkVibAll.Checked && Vibrance.PerScreen;
             Profile.LaunchCommand = txtLaunch.Text.Trim();
             Profile.CloseApps = string.Join("; ", Catalog.SplitNames(txtClose.Text));
             Profile.RelaunchApps = chkRelaunch.Checked;
